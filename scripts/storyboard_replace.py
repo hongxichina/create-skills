@@ -110,7 +110,7 @@ def build_replacement_prompt(
     return prompt
 
 
-def create_image_task(prompt: str, image_urls: list[str], size: str = "1024x1024") -> str:
+def create_image_task(prompt: str, image_urls: list[str], size: str = "2160x3840") -> str:
     """
     创建 GPT-image2 生图任务，返回 task_id。
 
@@ -213,7 +213,7 @@ def replace_storyboard(
     person_path: str = "",
     scene_path: str = "",
     output_dir: str = "",
-    size: str = "1024x1024",
+    size: str = "2160x3840",
 ) -> str:
     """
     完整的分镜替换流程。
@@ -314,7 +314,7 @@ def main():
     parser.add_argument("--person", default="", help="人物素材图路径")
     parser.add_argument("--scene", default="", help="场景素材图路径")
     parser.add_argument("--output-dir", default="", help="输出目录")
-    parser.add_argument("--size", default="1024x1024", help="输出尺寸 (默认 1024x1024)")
+    parser.add_argument("--size", default="2160x3840", help="输出尺寸 (默认 2160x3840)")
 
     args = parser.parse_args()
 
