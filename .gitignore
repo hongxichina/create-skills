@@ -1,0 +1,12 @@
+# 忽略系统文件
+.DS_Store
+
+# 忽略环境配置（含密钥）
+scripts/.env
+
+# 忽略产出数据（视频、截帧等）
+qwen_video/
+
+# Python
+__pycache__/
+*.pyc
