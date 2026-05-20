@@ -6,7 +6,7 @@ Stage 6: 视频生成 - 调用云梦 2.0 (seedance-2-0) 生成视频
 2. 时长（4-15秒）
 3. 分镜参考图（Stage 2 生成的新分镜图）
 
-固定参数：480p、9:16、sound=true
+固定参数：480p、9:16、person_generation=true、sound=false
 
 依赖: pip install requests python-dotenv
 """
@@ -71,9 +71,9 @@ def create_video_task(prompt: str, duration: int, storyboard_url: str) -> str:
             "duration": duration,
             "aspect_ratio": "9:16",
             "seedance_mode": "allround",
-            "sound": True,
+            "sound": False,
             "camera_fixed": False,
-            "person_generation": False,
+            "person_generation": True,
             "watermark": False,
         },
     }

@@ -102,6 +102,9 @@ def _extract_video_info(data: dict) -> dict:
         "author": "",
         "cover": "",
         "video_url": "",
+        "digg_count": 0,
+        "comment_count": 0,
+        "collect_count": 0,
     }
 
     def find_in_obj(obj, depth=0):
@@ -132,6 +135,22 @@ def _extract_video_info(data: dict) -> dict:
                     if cover_urls:
                         result["cover"] = cover_urls[0]
 
+            # 提取互动数据
+            if "digg_count" in obj and not result["digg_count"]:
+                val = obj["digg_count"]
+                if isinstance(val, int) and val > 0:
+                    result["digg_count"] = val
+
+            if "comment_count" in obj and not result["comment_count"]:
+                val = obj["comment_count"]
+                if isinstance(val, int) and val > 0:
+                    result["comment_count"] = val
+
+            if "collect_count" in obj and not result["collect_count"]:
+                val = obj["collect_count"]
+                if isinstance(val, int) and val > 0:
+                    result["collect_count"] = val
+
             for v in obj.values():
                 find_in_obj(v, depth + 1)
 
@@ -153,6 +172,18 @@ def format_markdown(result: dict) -> str:
         lines.append(f"**作者**: {result['author']}")
     lines.append(f"**视频ID**: {result['video_id']}")
     lines.append("")
+
+    # 互动数据
+    digg = result.get("digg_count", 0)
+    comment = result.get("comment_count", 0)
+    collect = result.get("collect_count", 0)
+    if digg or comment or collect:
+        lines.append("## 互动数据")
+        lines.append("")
+        lines.append(f"| 点赞 | 评论 | 收藏 |")
+        lines.append(f"|------|------|------|")
+        lines.append(f"| {digg} | {comment} | {collect} |")
+        lines.append("")
 
     lines.append("## 视频直链（无水印）")
     lines.append("")
