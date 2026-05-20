@@ -45,14 +45,14 @@ def _headers():
     }
 
 
-def create_video_task(prompt: str, duration: int, storyboard_url: str) -> str:
+def create_video_task(prompt: str, duration: int, image_urls: list[str]) -> str:
     """
     创建视频生成任务，返回 task_id。
 
     Args:
         prompt: 视频生成提示词
         duration: 视频时长（4-15秒）
-        storyboard_url: 分镜参考图公网URL
+        image_urls: 参考图URL列表（分镜图 + 产品图 + 可选人物图/场景图）
 
     Returns:
         task_id
@@ -65,7 +65,7 @@ def create_video_task(prompt: str, duration: int, storyboard_url: str) -> str:
         "type": "text_to_video",
         "input": {
             "prompt": prompt,
-            "image_urls": [storyboard_url],
+            "image_urls": image_urls,
         },
         "options": {
             "duration": duration,
@@ -157,6 +157,9 @@ def generate_video(
     prompt: str,
     duration: int,
     storyboard_image: str,
+    product_image: str,
+    person_image: str = "",
+    scene_image: str = "",
     output_dir: str = "",
     output_name: str = "generated_video.mp4",
 ) -> str:
@@ -166,22 +169,47 @@ def generate_video(
     Args:
         prompt: 视频生成提示词
         duration: 视频时长（4-15秒）
-        storyboard_image: 分镜参考图本地路径（会自动上传）
+        storyboard_image: 分镜参考图本地路径
+        product_image: 产品图本地路径
+        person_image: 人物参考图本地路径（可选）
+        scene_image: 场景参考图本地路径（可选）
         output_dir: 输出目录
         output_name: 输出文件名
 
     Returns:
         生成的视频文件保存路径
     """
+    image_urls = []
+
     # 上传分镜参考图
     print(f"  上传分镜参考图: {storyboard_image}")
     r = upload_image(storyboard_image)
-    storyboard_url = r.get("public_url") or r.get("external_read_url")
-    print(f"  -> {storyboard_url}")
+    image_urls.append(r.get("public_url") or r.get("external_read_url"))
+    print(f"  -> {image_urls[-1]}")
+
+    # 上传产品图
+    print(f"  上传产品图: {product_image}")
+    r = upload_image(product_image)
+    image_urls.append(r.get("public_url") or r.get("external_read_url"))
+    print(f"  -> {image_urls[-1]}")
+
+    # 上传人物图（如有）
+    if person_image:
+        print(f"  上传人物参考图: {person_image}")
+        r = upload_image(person_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
+
+    # 上传场景图（如有）
+    if scene_image:
+        print(f"  上传场景参考图: {scene_image}")
+        r = upload_image(scene_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
 
     # 创建任务
-    print(f"  创建视频生成任务 (duration={duration}s, 9:16, 480p)")
-    task_id = create_video_task(prompt, duration, storyboard_url)
+    print(f"  创建视频生成任务 (duration={duration}s, 9:16, 480p, {len(image_urls)}张参考图)")
+    task_id = create_video_task(prompt, duration, image_urls)
     print(f"  任务ID: {task_id}")
 
     # 轮询结果
@@ -208,17 +236,23 @@ def generate_video(
 def generate_from_segments(
     segments_file: str,
     storyboard_image: str,
+    product_image: str,
+    person_image: str = "",
+    scene_image: str = "",
     output_dir: str = "",
 ) -> list[str]:
     """
     从分段 Prompt 文件并发生成视频。
 
     解析文件中的每个 Segment，并发提交所有生成任务，并行轮询结果。
-    所有 Segment 共用同一张分镜参考图。
+    所有 Segment 共用同一组参考图（分镜图 + 产品图 + 可选人物/场景图）。
 
     Args:
         segments_file: 分段视频Prompt文件路径（或单段Prompt文件）
         storyboard_image: 分镜参考图本地路径
+        product_image: 产品图本地路径
+        person_image: 人物参考图本地路径（可选）
+        scene_image: 场景参考图本地路径（可选）
         output_dir: 输出目录
 
     Returns:
@@ -246,14 +280,35 @@ def generate_from_segments(
 
     print(f"检测到 {len(segments)} 个 Segment")
 
-    # 先上传分镜参考图（所有 Segment 共用）
+    # 上传所有参考图（所有 Segment 共用）
+    image_urls = []
+
     print(f"\n上传分镜参考图: {storyboard_image}")
     r = upload_image(storyboard_image)
-    storyboard_url = r.get("public_url") or r.get("external_read_url")
-    print(f"  -> {storyboard_url}\n")
+    image_urls.append(r.get("public_url") or r.get("external_read_url"))
+    print(f"  -> {image_urls[-1]}")
+
+    print(f"上传产品图: {product_image}")
+    r = upload_image(product_image)
+    image_urls.append(r.get("public_url") or r.get("external_read_url"))
+    print(f"  -> {image_urls[-1]}")
+
+    if person_image:
+        print(f"上传人物参考图: {person_image}")
+        r = upload_image(person_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
+
+    if scene_image:
+        print(f"上传场景参考图: {scene_image}")
+        r = upload_image(scene_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
+
+    print(f"\n共 {len(image_urls)} 张参考图")
 
     # 并发提交所有任务
-    print(f"并发提交 {len(segments)} 个生成任务...")
+    print(f"\n并发提交 {len(segments)} 个生成任务...")
     tasks = {}  # task_id -> (seg_num, duration)
 
     for seg_num, seg_text in segments:
@@ -263,7 +318,7 @@ def generate_from_segments(
             duration = int(float(duration_match.group(1)))
             duration = max(4, min(15, duration))
 
-        task_id = create_video_task(seg_text, duration, storyboard_url)
+        task_id = create_video_task(seg_text, duration, image_urls)
         tasks[task_id] = (seg_num, duration)
         print(f"  Segment {seg_num} (duration={duration}s) -> 任务ID: {task_id}")
 
@@ -312,6 +367,9 @@ def main():
     parser = argparse.ArgumentParser(description="Stage 6: 云梦 2.0 视频生成")
     parser.add_argument("prompt_file", help="视频Prompt文件路径（单段或分段）")
     parser.add_argument("storyboard_image", help="分镜参考图路径（Stage 2 生成的新分镜图）")
+    parser.add_argument("product_image", help="产品图路径")
+    parser.add_argument("--person", default="", help="人物参考图路径（可选）")
+    parser.add_argument("--scene", default="", help="场景参考图路径（可选）")
     parser.add_argument("--duration", type=int, default=0, help="视频时长（4-15秒，0=从Prompt自动检测）")
     parser.add_argument("--output-dir", default="", help="输出目录")
 
@@ -326,6 +384,10 @@ def main():
         print(f"错误: 分镜参考图不存在: {args.storyboard_image}")
         sys.exit(1)
 
+    if not Path(args.product_image).exists():
+        print(f"错误: 产品图不存在: {args.product_image}")
+        sys.exit(1)
+
     output_dir = args.output_dir or str(prompt_path.parent)
 
     print(f"输出目录: {output_dir}\n")
@@ -338,6 +400,9 @@ def main():
                 prompt=prompt_text,
                 duration=args.duration,
                 storyboard_image=args.storyboard_image,
+                product_image=args.product_image,
+                person_image=args.person,
+                scene_image=args.scene,
                 output_dir=output_dir,
             )
         else:
@@ -345,6 +410,9 @@ def main():
             paths = generate_from_segments(
                 segments_file=args.prompt_file,
                 storyboard_image=args.storyboard_image,
+                product_image=args.product_image,
+                person_image=args.person,
+                scene_image=args.scene,
                 output_dir=output_dir,
             )
             print(f"\n{'='*60}")
