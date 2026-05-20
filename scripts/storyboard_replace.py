@@ -110,13 +110,51 @@ def build_replacement_prompt(
     return prompt
 
 
-def create_image_task(prompt: str, image_urls: list[str]) -> str:
+MAX_SIDE = 3840
+
+
+def calculate_output_resolution(image_path: str) -> str:
+    """
+    根据原分镜图的宽高比计算输出分辨率。
+    
+    规则：
+    - 较长边固定为 3840
+    - 短边按比例缩放，向下取整到 16 的倍数
+    
+    Args:
+        image_path: 原分镜图本地路径
+        
+    Returns:
+        分辨率字符串，如 "2160x3840" 或 "3840x2160"
+    """
+    from PIL import Image
+
+    img = Image.open(image_path)
+    w, h = img.size
+    img.close()
+
+    if w >= h:
+        # 横图：宽为长边
+        new_w = MAX_SIDE
+        new_h = int(h * MAX_SIDE / w)
+        new_h = (new_h // 16) * 16  # 向下取整到16的倍数
+    else:
+        # 竖图：高为长边
+        new_h = MAX_SIDE
+        new_w = int(w * MAX_SIDE / h)
+        new_w = (new_w // 16) * 16  # 向下取整到16的倍数
+
+    return f"{new_w}x{new_h}"
+
+
+def create_image_task(prompt: str, image_urls: list[str], resolution: str) -> str:
     """
     创建 GPT-image2 生图任务，返回 task_id。
 
     Args:
         prompt: 替换提示词
         image_urls: 图片URL列表（第一张为原分镜图，后续为替换素材）
+        resolution: 输出分辨率（由 calculate_output_resolution 计算）
 
     Returns:
         task_id
@@ -130,7 +168,7 @@ def create_image_task(prompt: str, image_urls: list[str]) -> str:
             "image_urls": image_urls,
         },
         "options": {
-            "resolution": "2160x3840",
+            "resolution": resolution,
             "response_format": "url",
         },
     }
@@ -276,9 +314,10 @@ def replace_storyboard(
         image_urls.append(url)
         print(f"  -> {url}")
 
-    # 3. 创建生图任务
-    print("[3/4] 创建 GPT-image2 生图任务 (2160x3840)")
-    task_id = create_image_task(prompt, image_urls)
+    # 3. 计算输出分辨率并创建生图任务
+    resolution = calculate_output_resolution(storyboard_path)
+    print(f"[3/4] 创建 GPT-image2 生图任务 ({resolution})")
+    task_id = create_image_task(prompt, image_urls, resolution)
     print(f"  任务ID: {task_id}")
 
     # 4. 轮询直到成功，获取图片URL
