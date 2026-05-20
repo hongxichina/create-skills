@@ -110,14 +110,13 @@ def build_replacement_prompt(
     return prompt
 
 
-def create_image_task(prompt: str, image_urls: list[str], size: str = "2160x3840") -> str:
+def create_image_task(prompt: str, image_urls: list[str]) -> str:
     """
     创建 GPT-image2 生图任务，返回 task_id。
 
     Args:
         prompt: 替换提示词
         image_urls: 图片URL列表（第一张为原分镜图，后续为替换素材）
-        size: 输出尺寸
 
     Returns:
         task_id
@@ -131,7 +130,7 @@ def create_image_task(prompt: str, image_urls: list[str], size: str = "2160x3840
             "image_urls": image_urls,
         },
         "options": {
-            "resolution": size,
+            "resolution": "2160x3840",
             "response_format": "url",
         },
     }
@@ -213,7 +212,6 @@ def replace_storyboard(
     person_path: str = "",
     scene_path: str = "",
     output_dir: str = "",
-    size: str = "2160x3840",
 ) -> str:
     """
     完整的分镜替换流程。
@@ -224,7 +222,6 @@ def replace_storyboard(
         person_path: 人物素材图路径（为空则不替换人物）
         scene_path: 场景素材图路径（为空则不替换场景）
         output_dir: 输出目录（为空则保存到原分镜同目录）
-        size: 输出尺寸
 
     Returns:
         生成的新分镜图保存路径
@@ -280,8 +277,8 @@ def replace_storyboard(
         print(f"  -> {url}")
 
     # 3. 创建生图任务
-    print("[3/4] 创建 GPT-image2 生图任务")
-    task_id = create_image_task(prompt, image_urls, size=size)
+    print("[3/4] 创建 GPT-image2 生图任务 (2160x3840)")
+    task_id = create_image_task(prompt, image_urls)
     print(f"  任务ID: {task_id}")
 
     # 4. 轮询直到成功，获取图片URL
@@ -314,7 +311,6 @@ def main():
     parser.add_argument("--person", default="", help="人物素材图路径")
     parser.add_argument("--scene", default="", help="场景素材图路径")
     parser.add_argument("--output-dir", default="", help="输出目录")
-    parser.add_argument("--size", default="2160x3840", help="输出尺寸 (默认 2160x3840)")
 
     args = parser.parse_args()
 
@@ -329,7 +325,6 @@ def main():
             person_path=args.person,
             scene_path=args.scene,
             output_dir=args.output_dir,
-            size=args.size,
         )
         print(f"\n完成! 新分镜: {result_path}")
     except Exception as e:
