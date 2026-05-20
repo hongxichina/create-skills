@@ -211,9 +211,9 @@ def generate_from_segments(
     output_dir: str = "",
 ) -> list[str]:
     """
-    从分段 Prompt 文件批量生成视频。
+    从分段 Prompt 文件并发生成视频。
 
-    解析文件中的每个 Segment，逐个提交生成任务。
+    解析文件中的每个 Segment，并发提交所有生成任务，并行轮询结果。
     所有 Segment 共用同一张分镜参考图。
 
     Args:
@@ -224,6 +224,8 @@ def generate_from_segments(
     Returns:
         生成的视频文件路径列表
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     content = Path(segments_file).read_text(encoding="utf-8")
 
     # 尝试按 Segment 分割
@@ -250,50 +252,57 @@ def generate_from_segments(
     storyboard_url = r.get("public_url") or r.get("external_read_url")
     print(f"  -> {storyboard_url}\n")
 
-    video_paths = []
-    for seg_num, seg_text in segments:
-        print(f"{'='*60}")
-        print(f"Segment {seg_num}")
-        print(f"{'='*60}")
+    # 并发提交所有任务
+    print(f"并发提交 {len(segments)} 个生成任务...")
+    tasks = {}  # task_id -> (seg_num, duration)
 
-        # 从 Segment 文本中提取时长
+    for seg_num, seg_text in segments:
         duration_match = re.search(r"0\.00\s*-\s*([\d.]+)\s*s", seg_text)
-        duration = 5  # 默认
+        duration = 5
         if duration_match:
             duration = int(float(duration_match.group(1)))
             duration = max(4, min(15, duration))
 
-        print(f"  时长: {duration}s")
-
-        # 创建任务
-        print(f"  创建视频生成任务")
         task_id = create_video_task(seg_text, duration, storyboard_url)
-        print(f"  任务ID: {task_id}")
+        tasks[task_id] = (seg_num, duration)
+        print(f"  Segment {seg_num} (duration={duration}s) -> 任务ID: {task_id}")
 
-        # 轮询结果
+    print(f"\n全部任务已提交，并行轮询结果...\n")
+
+    # 并行轮询所有任务
+    def _poll_and_download(task_id: str, seg_num: str) -> str | None:
+        """轮询单个任务并下载结果"""
         try:
-            video_url = poll_video_task(task_id)
-            print(f"  视频URL: {video_url}")
-
-            # 下载视频
+            video_url = poll_video_task(task_id, timeout_seconds=600, interval=10)
             output_name = f"segment_{seg_num}.mp4"
             output_path = Path(output_dir) / output_name
             output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            print(f"  下载视频...")
             video_resp = requests.get(video_url, timeout=120)
             video_resp.raise_for_status()
             output_path.write_bytes(video_resp.content)
 
             size_mb = len(video_resp.content) / 1024 / 1024
-            print(f"  已保存: {output_path} ({size_mb:.1f}MB)")
-            video_paths.append(str(output_path))
-
+            print(f"\n  Segment {seg_num} 完成! -> {output_path} ({size_mb:.1f}MB)")
+            return str(output_path)
         except Exception as e:
-            print(f"  Segment {seg_num} 生成失败: {e}")
+            print(f"\n  Segment {seg_num} 失败: {e}")
+            return None
 
-        print()
+    video_paths = []
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = {
+            executor.submit(_poll_and_download, task_id, seg_num): seg_num
+            for task_id, (seg_num, _) in tasks.items()
+        }
 
+        for future in as_completed(futures):
+            result = future.result()
+            if result:
+                video_paths.append(result)
+
+    # 按 segment 编号排序
+    video_paths.sort()
     return video_paths
 
 
