@@ -85,9 +85,9 @@ def analyze_video(video_url: str) -> str:
     return completion.choices[0].message.content
 
 
-def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str = "拆解报告.md") -> str:
+def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str = "拆解报告.docx") -> str:
     """
-    分析视频并将结果保存为 markdown 文件。
+    分析视频并将结果保存为 Word 文档。
 
     Args:
         video_url: 视频CDN直链
@@ -98,6 +98,7 @@ def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str 
         保存的文件路径
     """
     from pathlib import Path
+    from md_to_docx import md_to_docx
 
     result = analyze_video(video_url)
 
@@ -107,7 +108,7 @@ def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str 
         save_path = Path.cwd() / filename
 
     save_path.parent.mkdir(parents=True, exist_ok=True)
-    save_path.write_text(result, encoding="utf-8")
+    md_to_docx(result, str(save_path))
 
     return str(save_path)
 
@@ -136,9 +137,10 @@ def main():
             save_dir = str(Path(args.base_dir) / "qwen_video" / today)
 
         if save_dir:
-            save_path = Path(save_dir) / "拆解报告.md"
+            save_path = Path(save_dir) / "拆解报告.docx"
             save_path.parent.mkdir(parents=True, exist_ok=True)
-            save_path.write_text(result, encoding="utf-8")
+            from md_to_docx import md_to_docx
+            md_to_docx(result, str(save_path))
             print(f"\n{'='*60}")
             print(f"拆解报告已保存: {save_path}")
 

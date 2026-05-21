@@ -135,9 +135,10 @@ def main():
 
         # 保存到输出目录
         output_dir = args.output_dir or str(prompt_path.parent)
-        output_path = Path(output_dir) / "分段视频Prompt.md"
+        from md_to_docx import md_to_docx
+        output_path = Path(output_dir) / "分段视频Prompt.docx"
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(result, encoding="utf-8")
+        md_to_docx(result, str(output_path))
         print(f"\n{'='*60}")
         print(f"分段结果已保存: {output_path}")
 

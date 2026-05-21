@@ -110,7 +110,9 @@ def build_replacement_prompt(
     return prompt
 
 
-MAX_SIDE = 3840
+MAX_PIXELS = 8294400  # 总像素上限（宽 × 高 ≤ 此值）
+MAX_SIDE = 3840      # 长边上限
+MAX_RATIO = 3.0      # 长边:短边 最大比例限制
 
 
 def calculate_output_resolution(image_path: str) -> str:
@@ -118,8 +120,11 @@ def calculate_output_resolution(image_path: str) -> str:
     根据原分镜图的宽高比计算输出分辨率。
     
     规则：
-    - 较长边固定为 3840
-    - 短边按比例缩放，向下取整到 16 的倍数
+    - 长边不超过 MAX_SIDE (3840)
+    - 总像素不超过 MAX_PIXELS (8294400)
+    - 长边与短边的比例不超过 3:1，超出时裁剪比例到 3:1
+    - 在以上约束内最大化长边
+    - 两边均向下取整到 16 的倍数
     
     Args:
         image_path: 原分镜图本地路径
@@ -127,6 +132,7 @@ def calculate_output_resolution(image_path: str) -> str:
     Returns:
         分辨率字符串，如 "2160x3840" 或 "3840x2160"
     """
+    import math
     from PIL import Image
 
     img = Image.open(image_path)
@@ -135,14 +141,39 @@ def calculate_output_resolution(image_path: str) -> str:
 
     if w >= h:
         # 横图：宽为长边
-        new_w = MAX_SIDE
-        new_h = int(h * MAX_SIDE / w)
-        new_h = (new_h // 16) * 16  # 向下取整到16的倍数
+        ratio = h / w  # ratio <= 1
+        # 限制比例：如果原图比例超过 3:1，强制收敛到 3:1
+        if ratio < 1.0 / MAX_RATIO:
+            ratio = 1.0 / MAX_RATIO
     else:
         # 竖图：高为长边
-        new_h = MAX_SIDE
-        new_w = int(w * MAX_SIDE / h)
-        new_w = (new_w // 16) * 16  # 向下取整到16的倍数
+        ratio = w / h  # ratio <= 1
+        if ratio < 1.0 / MAX_RATIO:
+            ratio = 1.0 / MAX_RATIO
+
+    # 求最大长边: long * (long * ratio) <= MAX_PIXELS
+    # long <= sqrt(MAX_PIXELS / ratio)，同时不超过 MAX_SIDE
+    long_edge = min(int(math.sqrt(MAX_PIXELS / ratio)), MAX_SIDE)
+
+    if w >= h:
+        new_w = (long_edge // 16) * 16
+        new_h = int(new_w * ratio)
+        new_h = (new_h // 16) * 16
+    else:
+        new_h = (long_edge // 16) * 16
+        new_w = int(new_h * ratio)
+        new_w = (new_w // 16) * 16
+
+    # 安全校验：如果取整后仍超限，缩减长边 16px 重算
+    while new_w * new_h > MAX_PIXELS:
+        if w >= h:
+            new_w -= 16
+            new_h = int(new_w * ratio)
+            new_h = (new_h // 16) * 16
+        else:
+            new_h -= 16
+            new_w = int(new_h * ratio)
+            new_w = (new_w // 16) * 16
 
     return f"{new_w}x{new_h}"
 

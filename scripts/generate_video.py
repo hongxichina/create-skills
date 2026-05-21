@@ -181,35 +181,48 @@ def generate_video(
     """
     image_urls = []
 
-    # 上传分镜参考图
-    print(f"  上传分镜参考图: {storyboard_image}")
+    # 图1: 上传分镜参考图
+    print(f"  上传分镜参考图 (图1): {storyboard_image}")
     r = upload_image(storyboard_image)
     image_urls.append(r.get("public_url") or r.get("external_read_url"))
     print(f"  -> {image_urls[-1]}")
 
-    # 上传产品图
-    print(f"  上传产品图: {product_image}")
+    # 图2: 上传产品图
+    print(f"  上传产品图 (图2): {product_image}")
     r = upload_image(product_image)
     image_urls.append(r.get("public_url") or r.get("external_read_url"))
     print(f"  -> {image_urls[-1]}")
 
-    # 上传人物图（如有）
-    if person_image:
-        print(f"  上传人物参考图: {person_image}")
-        r = upload_image(person_image)
-        image_urls.append(r.get("public_url") or r.get("external_read_url"))
-        print(f"  -> {image_urls[-1]}")
-
-    # 上传场景图（如有）
+    # 图3: 上传场景图（如有）
     if scene_image:
-        print(f"  上传场景参考图: {scene_image}")
+        print(f"  上传场景参考图 (图3): {scene_image}")
         r = upload_image(scene_image)
         image_urls.append(r.get("public_url") or r.get("external_read_url"))
         print(f"  -> {image_urls[-1]}")
 
+    # 图4: 上传人物图（如有）
+    if person_image:
+        print(f"  上传人物参考图 (图{len(image_urls) + 1}): {person_image}")
+        r = upload_image(person_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
+
+    # 构造带图片注解的提示词
+    image_annotation = "【参考图说明】\n图1是新的分镜图片，图2是我们的产品图"
+    img_index = 3
+    if scene_image:
+        image_annotation += f"，图{img_index}是要替换的场景"
+        img_index += 1
+    if person_image:
+        image_annotation += f"，图{img_index}是要替换的人"
+        img_index += 1
+    image_annotation += "。\n\n"
+
+    annotated_prompt = image_annotation + prompt
+
     # 创建任务
     print(f"  创建视频生成任务 (duration={duration}s, 9:16, 480p, {len(image_urls)}张参考图)")
-    task_id = create_video_task(prompt, duration, image_urls)
+    task_id = create_video_task(annotated_prompt, duration, image_urls)
     print(f"  任务ID: {task_id}")
 
     # 轮询结果
@@ -283,27 +296,38 @@ def generate_from_segments(
     # 上传所有参考图（所有 Segment 共用）
     image_urls = []
 
-    print(f"\n上传分镜参考图: {storyboard_image}")
+    print(f"\n上传分镜参考图 (图1): {storyboard_image}")
     r = upload_image(storyboard_image)
     image_urls.append(r.get("public_url") or r.get("external_read_url"))
     print(f"  -> {image_urls[-1]}")
 
-    print(f"上传产品图: {product_image}")
+    print(f"上传产品图 (图2): {product_image}")
     r = upload_image(product_image)
     image_urls.append(r.get("public_url") or r.get("external_read_url"))
     print(f"  -> {image_urls[-1]}")
 
+    if scene_image:
+        print(f"上传场景参考图 (图3): {scene_image}")
+        r = upload_image(scene_image)
+        image_urls.append(r.get("public_url") or r.get("external_read_url"))
+        print(f"  -> {image_urls[-1]}")
+
     if person_image:
-        print(f"上传人物参考图: {person_image}")
+        print(f"上传人物参考图 (图{len(image_urls) + 1}): {person_image}")
         r = upload_image(person_image)
         image_urls.append(r.get("public_url") or r.get("external_read_url"))
         print(f"  -> {image_urls[-1]}")
 
+    # 构造图片注解前缀（所有 Segment 共用）
+    image_annotation = "【参考图说明】\n图1是新的分镜图片，图2是我们的产品图"
+    img_index = 3
     if scene_image:
-        print(f"上传场景参考图: {scene_image}")
-        r = upload_image(scene_image)
-        image_urls.append(r.get("public_url") or r.get("external_read_url"))
-        print(f"  -> {image_urls[-1]}")
+        image_annotation += f"，图{img_index}是要替换的场景"
+        img_index += 1
+    if person_image:
+        image_annotation += f"，图{img_index}是要替换的人"
+        img_index += 1
+    image_annotation += "。\n\n"
 
     print(f"\n共 {len(image_urls)} 张参考图")
 
@@ -318,7 +342,8 @@ def generate_from_segments(
             duration = int(float(duration_match.group(1)))
             duration = max(4, min(15, duration))
 
-        task_id = create_video_task(seg_text, duration, image_urls)
+        annotated_seg_text = image_annotation + seg_text
+        task_id = create_video_task(annotated_seg_text, duration, image_urls)
         tasks[task_id] = (seg_num, duration)
         print(f"  Segment {seg_num} (duration={duration}s) -> 任务ID: {task_id}")
 

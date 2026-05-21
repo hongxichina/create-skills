@@ -113,14 +113,15 @@ def split_video_by_segments(video_path: Path, segments: list[dict], output_dir: 
 
 
 def extract_frames_uniform(video_path: Path, output_dir: Path, fps: int = 1) -> list[Path]:
-    """均匀抽帧：每秒N帧"""
+    """均匀抽帧：从第0秒开始，每秒取整数时间点的帧（0s, 1s, 2s, 3s...）"""
     output_dir.mkdir(parents=True, exist_ok=True)
     pattern = output_dir / "frame_%04d.jpg"
 
     cmd = [
         "ffmpeg", "-y",
         "-i", str(video_path),
-        "-vf", f"fps={fps}",
+        "-vf", f"select='isnan(prev_selected_t)+gte(t-prev_selected_t\\,{fps})'",
+        "-vsync", "vfr",
         "-q:v", "2",
         str(pattern),
     ]
@@ -268,8 +269,9 @@ def process_video(
 
     # 保存拆解报告到视频目录
     if analysis_text:
-        report_path = work_dir / "拆解报告.md"
-        report_path.write_text(analysis_text, encoding="utf-8")
+        from md_to_docx import md_to_docx
+        report_path = work_dir / "拆解报告.docx"
+        md_to_docx(analysis_text, str(report_path))
         print(f"  拆解报告已保存: {report_path.name}")
 
     # 3. 拆分视频
@@ -372,7 +374,7 @@ def main():
     parser.add_argument("video_url", help="视频CDN直链")
     parser.add_argument("segments_json", help='时间段JSON，如 \'[{"start":0,"end":3}]\'')
     parser.add_argument("content_name", nargs="?", default="", help="内容名称（用于目录命名）")
-    parser.add_argument("report_file", nargs="?", default="", help="拆解报告.md文件路径")
+    parser.add_argument("report_file", nargs="?", default="", help="拆解报告文件路径（.md 或 .docx）")
     parser.add_argument("--base-dir", default=None, help="工作目录（默认为当前目录）")
 
     args = parser.parse_args()

@@ -217,9 +217,10 @@ def main():
 
         # 保存到输出目录
         if args.output_dir:
-            output_path = Path(args.output_dir) / "最终视频Prompt.md"
+            from md_to_docx import md_to_docx
+            output_path = Path(args.output_dir) / "最终视频Prompt.docx"
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(result, encoding="utf-8")
+            md_to_docx(result, str(output_path))
             print(f"\n{'='*60}")
             print(f"最终 Video Prompt 已保存: {output_path}")
 
