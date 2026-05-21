@@ -270,9 +270,22 @@ def process_video(
     # 保存拆解报告到视频目录
     if analysis_text:
         from md_to_docx import md_to_docx
-        report_path = work_dir / "拆解报告.docx"
+        report_filename = f"{safe_name}-拆解报告.docx"
+        report_path = work_dir / report_filename
         md_to_docx(analysis_text, str(report_path))
         print(f"  拆解报告已保存: {report_path.name}")
+
+        # 上传到飞书
+        try:
+            from upload_feishu import upload_docx_to_feishu
+            feishu_result = upload_docx_to_feishu(
+                str(report_path),
+                doc_name=f"{safe_name}-拆解报告",
+                video_name=content_name,
+            )
+            print(f"  飞书文档: {feishu_result.get('url', '')}")
+        except Exception as e:
+            print(f"  飞书上传跳过: {e}")
 
     # 3. 拆分视频
     print(f"\n[2/5] 拆分视频")

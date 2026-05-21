@@ -71,14 +71,81 @@ sudo apt install ffmpeg
 
 ### 环境变量
 
-脚本依赖 `scripts/.env` 文件中的以下配置（参考 `scripts/.env.example`）：
+所有脚本通过 `scripts/.env` 加载配置。**`.env` 文件必须放在 `scripts/` 目录下**（与 `scripts/.env.example` 同级），参考 `.env.example` 创建。
 
-| 变量名 | 用途 |
-|--------|------|
-| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key（视频分析 + Prompt 编排） |
-| `YUNJIAN_BASE_URL` | 云简平台地址 |
-| `YUNJIAN_TOKEN` | 云简平台认证 Token |
-| `YUNJIAN_SITE_ID` | 云简平台站点 ID |
+#### 1. 阿里云百炼 API Key（`DASHSCOPE_API_KEY`）
+
+用于视频内容分析（Stage 1）和 Video Prompt 编排（Stage 4）。
+
+获取步骤：
+1. 打开 [阿里云百炼控制台](https://bailian.console.aliyun.com/)
+2. 登录后点击右上角头像 → **API-KEY 管理**
+3. 创建新的 API Key，复制后填入 `DASHSCOPE_API_KEY`
+
+#### 2. 云简平台配置（`YUNJIAN_BASE_URL` / `YUNJIAN_TOKEN` / `YUNJIAN_SITE_ID`）
+
+用于图片/视频上传、GPT-image2 分镜替换（Stage 2）、Seedance 2.0 视频生成（Stage 6）。
+
+获取步骤：
+1. 登录云简控制台（`YUNJIAN_BASE_URL` 对应的平台地址）
+2. 进入 **系统设置 → 系统令牌**，复制令牌填入 `YUNJIAN_TOKEN`
+3. `YUNJIAN_SITE_ID` 填写你的站点 ID（通常为 `10000`，可在控制台 URL 或设置中查看）
+
+#### 3. 飞书开放平台配置（`FEISHU_APP_ID` / `FEISHU_APP_SECRET` / `FEISHU_USER_ID`）
+
+用于将拆解报告自动上传到飞书文档。
+
+**创建飞书应用步骤：**
+1. 打开 [飞书开放平台](https://open.feishu.cn/app)，登录飞书账号
+2. 点击「创建企业自建应用」，填写名称（如"视频拆解助手"）
+3. 进入应用 → **凭证与基础信息**，复制 **App ID** 和 **App Secret**
+
+**开通权限（必须）：**
+进入应用 → **权限管理** → 搜索并开通以下权限：
+
+| 权限标识 | 说明 |
+|----------|------|
+| `drive:drive` | 查看、评论、编辑和管理云空间中所有文件（上传文件、创建文件夹、导入文档） |
+
+**发布应用：**
+进入 **版本管理与发布** → 创建版本 → 提交发布（自建应用无需审核，立即生效）
+
+**获取 `FEISHU_USER_ID`（用于自动共享文档给自己）：**
+
+方法一（推荐）：
+1. 打开飞书 → 点击左下角头像 → **个人信息**
+2. 在 URL 中或通过飞书管理后台 → 组织架构 → 找到自己，查看 user_id
+
+方法二（API 查询）：
+```bash
+# 用 App ID 和 App Secret 换取 token 后调用
+curl -H "Authorization: Bearer <tenant_access_token>" \
+  "https://open.feishu.cn/open-apis/contact/v3/users/me?user_id_type=user_id"
+```
+返回结果中的 `user_id` 字段即为所需值。
+
+**`FEISHU_FOLDER_TOKEN`（可选）：**
+留空则文档上传到应用根目录。如需指定文件夹，在飞书网页版打开目标文件夹，URL 中 `/folder/` 后面的字符串即为 folder token。
+
+#### 完整 `.env` 示例
+
+```ini
+# 阿里云百炼（https://bailian.console.aliyun.com/）
+DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+# 云简平台
+YUNJIAN_BASE_URL=https://your-yunjian-domain.com
+YUNJIAN_TOKEN=yjsys-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+YUNJIAN_SITE_ID=10000
+
+# 飞书开放平台（https://open.feishu.cn/app）
+FEISHU_APP_ID=cli_xxxxxxxxxxxxxxxx
+FEISHU_APP_SECRET=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+FEISHU_FOLDER_TOKEN=
+FEISHU_USER_ID=xxxxxxxx
+```
+
+> **注意**：`.env` 文件必须放在 `scripts/` 目录下，即与 `scripts/.env.example` 同级。不要放在项目根目录。
 
 ### 自动检测与安装流程
 
@@ -126,10 +193,35 @@ if not env_path.exists():
 | `scripts/generate_video_prompt.py` | Stage 4 | 编排最终 Video Prompt | 拆解报告 + 新分镜图URL + 产品图URL + 可选素材 | 最终视频生成Prompt |
 | `scripts/segment_video_prompt.py` | Stage 5 | 长视频Prompt智能分段 | 最终Video Prompt文件 | 分段后的多个独立Segment Prompt |
 | `scripts/generate_video.py` | Stage 6 | 云梦2.0视频生成 | Prompt文件 + 分镜图 + 产品图 + 可选人物/场景图 | 生成的视频文件(.mp4) |
+| `scripts/upload_feishu.py` | 通用 | 上传 .docx 到飞书文档 | 本地 .docx 文件路径 | 飞书在线文档 URL |
 
 ## 智能体编排流程
 
 使用此技能时，智能体必须先获取当前对话的工作目录（即用户所在目录），所有产出保存到该目录下的 `qwen_video/` 中。
+
+### 交互模式规则
+
+**除非用户明确说"一次性跑完"或"全部执行"，否则智能体必须逐步执行，每完成一步后暂停，向用户展示本步产出，并询问下一步操作。**
+
+完整步骤顺序如下：
+
+```
+Step 0: 确定工作目录
+Step 1: 解析视频链接 / 上传本地视频
+Step 2: AI 分析视频内容（生成拆解报告，自动上传飞书）
+Step 3: 下载视频 + 按时间轴拆分 + 抽帧 + 合成分镜大图
+Step 4: 结构化整理动作骨架（Stage 3）
+Step 5: 分镜受控替换（Stage 2，需用户提供素材图）
+Step 6: 编排最终 Video Prompt（Stage 4）
+Step 7: 长视频 Prompt 分段（Stage 5，仅当总时长 > 15s）
+Step 8: 生成视频（Stage 6）
+```
+
+每步完成后，智能体应：
+1. 展示本步的关键产出（文件路径、飞书链接、分析摘要等）
+2. 询问用户："接下来要执行哪一步？" 并列出可选的下一步
+
+如果用户只是粘贴了一个视频链接，默认只执行 Step 1，完成后询问用户是否继续。
 
 ### Step 0: 确定工作目录
 
@@ -158,7 +250,23 @@ title = result.get("title", "")
 python scripts/video_analyze.py "<CDN直链>" "<CWD>/qwen_video/<日期>/<内容名称>"
 ```
 
-分析结果会打印到 stdout 并保存为该目录下的 `拆解报告.md`。
+分析结果会打印到 stdout 并保存为该目录下的 `拆解报告.docx`，同时自动上传到飞书。
+
+飞书文档的存放路径为：`<FEISHU_FOLDER_TOKEN 对应的根文件夹>/<YYYY-MM-DD>/<视频名称>/拆解报告.docx`
+
+智能体在上传飞书前，需要先确保飞书目标文件夹存在。如果不存在，调用飞书创建文件夹 API 按 `<日期>/<视频名称>` 的层级创建。
+
+```python
+from scripts.upload_feishu import upload_docx_to_feishu
+
+# 上传拆解报告到飞书
+result = upload_docx_to_feishu(
+    file_path="qwen_video/20260521/氨糖带货/拆解报告.docx",
+    doc_name="拆解报告",
+    folder_token="<日期/视频名称 对应的文件夹 token>",
+)
+print(result["url"])  # 飞书文档链接
+```
 
 ### Step 3: 提取时间段
 
@@ -197,7 +305,7 @@ process_video(
 ```
 <当前工作目录>/qwen_video/<日期>/<内容名称>/
 ├── original.mp4              # 原始视频
-├── 拆解报告.md               # AI分析报告
+├── 拆解报告.docx             # AI分析报告（同步上传飞书）
 ├── 场景变化总览.jpg           # 全视频场景检测合成大图 (threshold=0.45)
 ├── 全视频时间轴总览.jpg       # 全视频每秒1帧合成大图
 ├── 场景检测/                 # 场景变化截图（原视频整体检测）
@@ -209,6 +317,19 @@ process_video(
     │   └── 分镜总览_xxx.jpg  # 合成大图
     └── ...
 ```
+
+### 飞书文档目录结构
+
+拆解报告上传到飞书后的目录结构：
+
+```
+<FEISHU_FOLDER_TOKEN 根文件夹>/
+└── <YYYY-MM-DD>/
+    └── <视频名称>/
+        └── 拆解报告.docx     # 飞书在线文档
+```
+
+智能体在上传前需确保飞书目标文件夹按 `<日期>/<视频名称>` 层级存在，不存在则创建。
 
 ---
 

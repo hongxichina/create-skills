@@ -28,16 +28,18 @@ This is a second-stage prompt orchestration task.
 
 You must generate a new forward-generation video prompt based on:
 
-- Original video breakdown = action, timing, rhythm, camera, transition, product role, and interaction skeleton
+- Original video breakdown (拆解报告) = the primary reference source. You must thoroughly read and understand the full breakdown report, and use it as the foundation for the final prompt. Every action, timing, rhythm, camera movement, transition, product role, and interaction described in the breakdown must be reflected in the final output.
 - Uploaded storyboard grid = final visual anchor for model, pose, framing, gaze, hand position, composition, and scene appearance
 - Uploaded product image = only product appearance reference
 
 The core rule is:
 
-Action follows the original video breakdown.
+Action follows the original video breakdown (拆解报告).
 Visual appearance follows the uploaded storyboard grid.
 Product appearance follows the uploaded product image.
 Voice style follows the visible model and video style.
+
+The original video breakdown (拆解报告) is the most important textual input. Do not ignore, skip, or summarize any part of it. The final prompt must demonstrate that every detail from the breakdown has been considered and incorporated.
 
 The final prompt must be understandable by a video generation model even if the model knows nothing about the original video or the replacement process.
 
@@ -382,7 +384,7 @@ If SRT is provided:
 
 # Language & Style Rules
 
-The final video prompt should be in English unless the user requests another language.
+The final video prompt must be in Chinese (中文).
 
 Do not mix Chinese and English inside the same Panel description.
 

@@ -85,22 +85,29 @@ def analyze_video(video_url: str) -> str:
     return completion.choices[0].message.content
 
 
-def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str = "拆解报告.docx") -> str:
+def analyze_and_save(video_url: str, save_dir: str | None = None, video_name: str = "", upload_feishu: bool = True) -> dict:
     """
-    分析视频并将结果保存为 Word 文档。
+    分析视频并将结果保存为 Word 文档，可选上传到飞书。
 
     Args:
         video_url: 视频CDN直链
         save_dir: 保存目录（为空则保存到当前目录）
-        filename: 保存的文件名
+        video_name: 视频名称（必填，用于文件命名，如 "氨糖带货"）
+        upload_feishu: 是否上传到飞书（默认 True）
 
     Returns:
-        保存的文件路径
+        包含 local_path 和 feishu_url（如有）的字典
     """
     from pathlib import Path
     from md_to_docx import md_to_docx
 
+    if not video_name:
+        raise ValueError("video_name 不能为空，必须提供视频名称用于文件命名")
+
     result = analyze_video(video_url)
+
+    # 文件名格式：<视频名称>-拆解报告.docx
+    filename = f"{video_name}-拆解报告.docx"
 
     if save_dir:
         save_path = Path(save_dir) / filename
@@ -110,7 +117,22 @@ def analyze_and_save(video_url: str, save_dir: str | None = None, filename: str 
     save_path.parent.mkdir(parents=True, exist_ok=True)
     md_to_docx(result, str(save_path))
 
-    return str(save_path)
+    output = {"local_path": str(save_path), "feishu_url": ""}
+
+    # 上传到飞书
+    if upload_feishu:
+        try:
+            from upload_feishu import upload_docx_to_feishu
+            feishu_result = upload_docx_to_feishu(
+                str(save_path),
+                doc_name=f"{video_name}-拆解报告",
+                video_name=video_name,
+            )
+            output["feishu_url"] = feishu_result.get("url", "")
+        except Exception as e:
+            print(f"  飞书上传失败（不影响本地保存）: {e}")
+
+    return output
 
 
 def main():
@@ -119,6 +141,7 @@ def main():
     parser = argparse.ArgumentParser(description="调用百炼 qwen3.6-plus 分析视频内容")
     parser.add_argument("video_url", help="视频CDN直链")
     parser.add_argument("save_dir", nargs="?", default=None, help="拆解报告保存目录")
+    parser.add_argument("--video-name", default="", help="视频名称（用于文件命名，如 '氨糖带货'）")
     parser.add_argument("--base-dir", default=None, help="工作根目录（与save_dir二选一，会自动创建qwen_video子目录）")
 
     args = parser.parse_args()
@@ -137,12 +160,29 @@ def main():
             save_dir = str(Path(args.base_dir) / "qwen_video" / today)
 
         if save_dir:
-            save_path = Path(save_dir) / "拆解报告.docx"
+            video_name = args.video_name
+            if not video_name:
+                print("错误: 必须通过 --video-name 指定视频名称")
+                sys.exit(1)
+            filename = f"{video_name}-拆解报告.docx"
+            save_path = Path(save_dir) / filename
             save_path.parent.mkdir(parents=True, exist_ok=True)
             from md_to_docx import md_to_docx
             md_to_docx(result, str(save_path))
             print(f"\n{'='*60}")
             print(f"拆解报告已保存: {save_path}")
+
+            # 上传到飞书
+            try:
+                from upload_feishu import upload_docx_to_feishu
+                feishu_result = upload_docx_to_feishu(
+                    str(save_path),
+                    doc_name=f"{video_name}-拆解报告",
+                    video_name=video_name,
+                )
+                print(f"飞书文档: {feishu_result.get('url', '')}")
+            except Exception as e:
+                print(f"飞书上传跳过: {e}")
 
     except ValueError as e:
         print(f"配置错误: {e}")
